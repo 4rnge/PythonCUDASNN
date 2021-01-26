@@ -11,11 +11,11 @@ mnist = tf.keras.datasets.mnist
 (x_train, y_train), (x_test, y_test) = mnist.load_data()
 x_train, x_test = x_train / 255.0, x_test / 255.0
 
-outputLayerSize = 50
+outputLayerSize = 100
 
 #layer sizes, size of input window, and learning rate
 #KEEP THIS SO I DONT FORGET :P
-SNN = SpikingCudaNetwork([784, 1000, 300, outputLayerSize], 100, 101, .003, 0, threshold=[7, 3, 2])
+SNN = SpikingCudaNetwork([784, 300, outputLayerSize], 100, 101, .01, .011, 0, threshold=[10, 4])
 #SNN = SpikingCudaNetwork([outputLayerSize], 100, 101, .04, 0, threshold = 1)
 
 
@@ -36,8 +36,8 @@ for i in range(0, 16000, 50):
 print("started at " + str(datetime.datetime.now()))
 
 #the number of epochs it will run the same section 10 times
-for e in range(0, 1):
-    #if 1 < 0:
+#for e in range(0, 1):
+if 1 < 0:
     random.shuffle(batches)
 
     print("running epoch " + str(e))
@@ -99,7 +99,7 @@ if 1 > 0:  # or choice == "y":
     results = np.zeros((1000, outputLayerSize))
     labels = np.zeros(1000)
     trainingSize = 1000
-    imageStart = 4000
+    imageStart = 20000
     imageCount = 1000
     testSize = 1000
     for e in range(0, 1):
@@ -118,6 +118,8 @@ if 1 > 0:  # or choice == "y":
 
             output = SNN.inputValues(np.array(inputs), STDP=False)
             SNN.reinitialize()
+            print(y_train[i])
+            print(output)
             minimum = 1000
             listOfSpikes = []
 
