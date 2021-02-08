@@ -188,14 +188,14 @@ class SpikingCudaNetwork:
         cuda.syncthreads()
 
     @cuda.jit
-    def adjustWeights(layer, weights, spikes, history, historyTimes, historyCount, learningRate, learningRate2, STDP):
+    def adjustWeights(layer, weights, spikes, history, historyTimes, historyCount, learningRate, learningRate2, STDP, time):
         neuron = cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
 
         if neuron < spikes.size and spikes[neuron] == 1:
             spikes[neuron] = -1
             if STDP is True:
                 for i in range(0, historyCount[neuron]):
-                    weights[neuron][history[neuron][i]] += learningRate * weights[neuron][history[neuron][i]] * (1.0 - weights[neuron][history[neuron][i]])
+                    weights[neuron][history[neuron][i]] += (historyTimes[neuron][i] / time) * learningRate * weights[neuron][history[neuron][i]] * (1.0 - weights[neuron][history[neuron][i]])
             historyCount[neuron] = 0
 
         elif neuron < spikes.size and spikes[neuron] == -1:
@@ -231,7 +231,8 @@ class SpikingCudaNetwork:
             self.inputTrackerCount[layerIndex],
             self.learningRate,
             self.learningRate2,
-            STDP)
+            STDP,
+            timeIndex)
 
         cuda.synchronize()
 
@@ -242,7 +243,8 @@ class SpikingCudaNetwork:
             for row in layer:
                 for i in range(0, len(row)):
                     #row[i] = np.random.normal(loc=.8, scale=.01)
-                    row[i] = (2 * (random.random() - .5))
+                    row[i] = np.random.normal(loc=.0, scale=.8)
+                    #row[i] = (2 * (random.random() - .5))
 
     #TODO this is not final yet
     def inputValues(self, values, STDP=True):
