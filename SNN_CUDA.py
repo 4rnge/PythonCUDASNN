@@ -47,6 +47,13 @@ class SpikingCudaNetwork:
             self.layersPotential.append(cuda.to_device(np.zeros(i)))
             self.spikes.append(cuda.to_device(np.zeros(i)))
 
+        #Spiking times for each neuron
+        self.spikeTime = []
+        #creates all of the layers starting potential
+        for i in self.layerSizes:
+            self.spikeTime.append(cuda.to_device(np.full(i, -1)))
+
+
         #creating the weights arrays
         self.weightsTemp = []
         self.weightsTemp.append(np.ones((1, 1)))
@@ -85,6 +92,13 @@ class SpikingCudaNetwork:
         for i in self.layerSizes:
             self.layersPotential.append(cuda.to_device(np.zeros(i)))
             self.spikes.append(cuda.to_device(np.zeros(i)))
+
+        #Spiking times for each neuron
+        self.spikeTime = []
+        #creates all of the layers starting potential
+        for i in self.layerSizes:
+            self.spikeTime.append(cuda.to_device(np.full(i, -1)))
+
         self.inputTracker = []
         self.inputTracker.append(cuda.to_device(np.zeros((1, 1))))
         self.inputTimes = []
@@ -98,7 +112,7 @@ class SpikingCudaNetwork:
             self.inputTrackerCount.append(cuda.to_device(np.full((self.layerSizes[i]), 0)))
 
     @cuda.jit
-    def advanceTimeCUDA(prevSpikes, potential, postSpikes, layerWeights, layerindex, history, historyTimes, historyCount, time, threshold):
+    def advanceTimeCUDA(prevSpikes, potential, postSpikes, layerWeights, layerindex, history, historyTimes, historyCount, time, threshold, spikeTime):
 
         index = cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
 
@@ -125,45 +139,11 @@ class SpikingCudaNetwork:
                 #determines if this neuron spiked
                 if potential[index] >= threshold and postSpikes[index] != -1:
                     postSpikes[index] = 1
+                    spikeTime[index] = time
 
         #TODO might also want to clear prevSpikes here
         #i think that this has to be here, but I am not sure
         cuda.syncthreads()
-
-    #I am currently leaning towards having the kernel be a np array that stores the parameters for the kernel
-    @cuda.jit
-    def advanceTimeCNN(prevSpikes, potential, postSpikes, layerWeights, layerindex, history, historyTimes, historyCount, time, threshold, kernel):
-
-        index = cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
-        return
-        if index < potential.size:
-
-            for i in range(0, layerWeights[layerindex].size):
-
-                #skip neurons that have already spiked
-                if postSpikes[index] == -1 and prevSpikes[i] == 1:
-                    #print("history count")
-                    #print(historyCount[index])
-                    history[index][historyCount[index]] = i
-                    historyTimes[index][historyCount[index]] = time
-                    historyCount[index] += 1
-                    continue
-
-                #layerWeights[index][i] += 1
-                #keeps track of the input spikes
-                if prevSpikes[i] == 1:
-                    potential[index] += layerWeights[index][i] * prevSpikes[i]
-                    history[index][historyCount[index]] = i
-                    historyTimes[index][historyCount[index]] = time
-                    historyCount[index] += 1
-                #determines if this neuron spiked
-                if potential[index] >= threshold and postSpikes[index] != -1:
-                    postSpikes[index] = 1
-
-        #TODO might also want to clear prevSpikes here
-        #i think that this has to be here, but I am not sure
-        cuda.syncthreads()
-
 
     @cuda.jit
     def CUDAInput(spikes, inputSpikes, timeStep):
@@ -188,14 +168,19 @@ class SpikingCudaNetwork:
         cuda.syncthreads()
 
     @cuda.jit
-    def adjustWeights(layer, weights, spikes, history, historyTimes, historyCount, learningRate, learningRate2, STDP, time):
+    def adjustWeights(layer, weights, spikes, history, historyTimes, historyCount, learningRate, learningRate2, STDP, time, spikeTime):
         neuron = cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
 
         if neuron < spikes.size and spikes[neuron] == 1:
             spikes[neuron] = -1
             if STDP is True:
                 for i in range(0, historyCount[neuron]):
-                    weights[neuron][history[neuron][i]] += (historyTimes[neuron][i] / time) * learningRate * weights[neuron][history[neuron][i]] * (1.0 - weights[neuron][history[neuron][i]])
+                    #weights[neuron][history[neuron][i]] += (historyTimes[neuron][i] / time) * learningRate * weights[neuron][history[neuron][i]] * (1.0 - weights[neuron][history[neuron][i]])
+                    deltaT = (historyTimes[neuron][i] - time)
+                    deltaT = deltaT / 100.0
+                    deltaW = 1 * 2.71828**(deltaT / .02)
+                    weights[neuron][history[neuron][i]] += deltaW * learningRate
+
             historyCount[neuron] = 0
 
         elif neuron < spikes.size and spikes[neuron] == -1:
@@ -203,7 +188,11 @@ class SpikingCudaNetwork:
 
             if STDP is True:
                 for i in range(0, historyCount[neuron]):
-                    weights[neuron][history[neuron][i]] -= (learningRate2) * weights[neuron][history[neuron][i]] * (1.0 - weights[neuron][history[neuron][i]])
+                    #weights[neuron][history[neuron][i]] -= (learningRate2) * weights[neuron][history[neuron][i]] * (1.0 - weights[neuron][history[neuron][i]])
+                    deltaT = (spikeTime[neuron] - time) - 1
+                    deltaT = deltaT / 100.0
+                    deltaW = -1 * 2.71828**(-deltaT / .02)
+                    weights[neuron][history[neuron][i]] += deltaW * learningRate
             historyCount[neuron] = 0
         cuda.syncthreads()
 
@@ -219,7 +208,8 @@ class SpikingCudaNetwork:
             self.inputTimes[layerIndex],
             self.inputTrackerCount[layerIndex],
             timeIndex,
-            thresholdParam)
+            thresholdParam,
+            self.spikeTime[layerIndex])
         cuda.synchronize()
 
     #wrapper function for the weight adjustment kernel
@@ -232,7 +222,8 @@ class SpikingCudaNetwork:
             self.learningRate,
             self.learningRate2,
             STDP,
-            timeIndex)
+            timeIndex,
+            self.spikeTime[layerIndex])
 
         cuda.synchronize()
 
