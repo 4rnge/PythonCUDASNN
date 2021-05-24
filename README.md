@@ -11,8 +11,8 @@ then, I ran into issues with tensorflow not being able to find the libcudart.so.
 there was a stack overflow link https://stackoverflow.com/questions/64141446/how-to-install-cuda-10-1-on-linux-ubuntu
 and the solution was running: 
 
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/include
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/lib64
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/include  
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/lib64  
 
 This seemed to fix the problems that I was running into.
 
