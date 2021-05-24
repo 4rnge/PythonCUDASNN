@@ -15,3 +15,8 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/include
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/lib64
 
 This seemed to fix the problems that I was running into.
+
+There was also an issue that needed the Cudnn installation 
+Download cuDNN v7.6.5 (November 5th, 2019), for CUDA 10.1
+https://developer.nvidia.com/rdp/cudnn-archive
+https://docs.nvidia.com/deeplearning/cudnn/install-guide/index.html
